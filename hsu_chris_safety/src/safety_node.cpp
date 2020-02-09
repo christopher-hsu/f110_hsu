@@ -61,8 +61,6 @@ public:
         for (int ii = 0; ii < num_scans; ii++)
         {
             range_dot = speed * cos(scan_msg->angle_min + ii * scan_msg->angle_increment);
-            
-            
             TTC = scan_msg->ranges[ii] / ((range_dot > 0) ? range_dot : 0);
             if (TTC < min_TTC)
             {
