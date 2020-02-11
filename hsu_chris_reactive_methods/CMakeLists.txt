@@ -18,3 +18,9 @@ catkin_package()
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
+
+#add_executable(gap_follow_node src/reactive_gap_follow.cpp)
+
+#target_link_libraries(gap_follow_node
+#  ${catkin_LIBRARIES}
+#)
