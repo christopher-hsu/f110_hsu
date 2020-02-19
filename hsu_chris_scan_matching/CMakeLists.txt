@@ -24,5 +24,5 @@ include_directories(
   ${EIGEN3_INCLUDE_DIRS}
 )
 
-add_executable(hsu_chris_scan_matching src/scan_match.cpp src/transform.cpp src/correspond.cpp src/visualization.cpp)
-target_link_libraries(hsu_chris_scan_matching ${catkin_LIBRARIES})
+add_executable(scan_matcher src/scan_match.cpp src/transform.cpp src/correspond.cpp src/visualization.cpp)
+target_link_libraries(scan_matcher ${catkin_LIBRARIES})

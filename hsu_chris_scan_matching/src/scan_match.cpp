@@ -84,8 +84,8 @@ class ScanProcessor {
 
 
 
-        //************************************************ Find correspondence between points of the current and previous frames  *************** ////
-        // **************************************************** getCorrespondence() function is the fast search function and getNaiveCorrespondence function is the naive search option **** ////
+        //********** Find correspondence between points of the current and previous frames  *************** ////
+        // ********* getCorrespondence() function is the fast search function and getNaiveCorrespondence function is the naive search option **** ////
 
         // getCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
 
@@ -95,7 +95,7 @@ class ScanProcessor {
         prev_trans = curr_trans;
         ++count;
 
-        // **************************************** We update the transforms here ******************************************* ////
+        // ********* We update the transforms here ******************************************* ////
         updateTransform(corresponds, curr_trans);
 
       }

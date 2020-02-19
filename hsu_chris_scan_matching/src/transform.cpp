@@ -70,11 +70,11 @@ float greatest_real_root(float a, float b, float c, float d, float e) {
   for (complex<float> root: roots) {
     if(root.imag()==0){
     max_real_root = max(max_real_root, root.real());
-  }
+    }
   //std::cout<<"Max real root:" << max_real_root<<std::endl;
-
+  }
   return max_real_root;
-}}
+}
 
 void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans) {
   // Written with inspiration from: https://github.com/AndreaCensi/gpc/blob/master/c/gpc.c
@@ -84,43 +84,112 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
   // input : curr_trans : A Transform object refernece
   // output : update the curr_trans object. Being a call by reference function, Any changes you make to curr_trans will be reflected in the calling function in the scan_match.cpp program/
 
-// You can change the number of iterations here. More the number of iterations, slower will be the convergence but more accurate will be the results. You need to find the right balance.
-int number_iter = 1;
+  // You can change the number of iterations here. More the number of iterations, slower will be the convergence but more accurate will be the results. You need to find the right balance.
+  int number_iter = 1;
 
-for(int i = 0; i<number_iter; i++){
+  // Eigen::Vector4f prev_x;
+  // prev_x.setZero();
+  // Eigen::Vector4f x;
+  // x << 10, 10, 10, 10;
+  // float error = 1;
+  // int i = 0;
+  // while(i<number_iter || (x-prev_x).norm()>error) {
+  //   // std::cout << i << '\n';
+  //   prev_x = x;
+  for(int i = 0; i<number_iter; i++) {
 
-  //fill in the values of the matrics
-  Eigen::MatrixXf M_i(2, 4);
-  Eigen::Matrix2f C_i;
-  Eigen::Vector2f pi_i;
+    //fill in the values of the matrics
+    Eigen::MatrixXf M_i(2, 4);
+    Eigen::Matrix2f C_i;
+    Eigen::Vector2f pi_i;
 
-  // Fill in the values for the matrices
-  Eigen::Matrix4f M, W;
-  Eigen::MatrixXf g(4, 1);
-  M << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
-  W << 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1;
-  g << 0, 0, 0, 0;
+    // Fill in the values for the matrices
+    Eigen::Matrix4f M, W;
+    Eigen::MatrixXf g(1, 4);
+    M << 0, 0, 0, 0, 
+         0, 0, 0, 0,
+         0, 0, 0, 0,
+         0, 0, 0, 0;
+    W << 0, 0, 0, 0,
+         0, 0, 0, 0,
+         0, 0, 1, 0,
+         0, 0, 0, 1;
+    g << 0, 0, 0, 0;
 
+    for(int ii=0; ii<corresponds.size(); ii++) {
 
-  // Define sub-matrices A, B, D from M
-  Eigen::Matrix2f A, B, D;
+      M_i << 1, 0, corresponds[ii].po->getX(), -corresponds[ii].po->getY(), 
+             0, 1, corresponds[ii].po->getY(), corresponds[ii].po->getX();
+      C_i << corresponds[ii].getNormalNorm()*corresponds[ii].getNormalNorm().transpose();
+      pi_i(0) = corresponds[ii].pj1->getX();
+      pi_i(1) = corresponds[ii].pj1->getY();
 
-  //define S and S_A matrices from the matrices A B and D
-  Eigen::Matrix2f S;
-  Eigen::Matrix2f S_A;
+      M += M_i.transpose()*C_i*M_i;
+      g += -2*pi_i.transpose()*C_i*M_i;
+    }
 
-  //find the coefficients of the quadratic function of lambda
-  float pow_2; float pow_1; float pow_0;
+    // Define sub-matrices A, B, D from M
+    Eigen::Matrix2f A, B, D;
 
-  // find the value of lambda by solving the equation formed. You can use the greatest real root function
-  float lambda;
+    A = 2*M.block<2,2>(0,0);
+    B = 2*M.block<2,2>(0,2);
+    D = 2*M.block<2,2>(2,2);
 
-  //find the value of x which is the vector for translation and rotation
-  Eigen::Vector4f x;
+    //define S and S_A matrices from the matrices A B and D
+    Eigen::Matrix2f S;
+    Eigen::Matrix2f S_A;
 
-  // Convert from x to new transform
+    S = D - B.transpose()*A.inverse()*B;
+    S_A = S.determinant()*S.inverse();
 
-  float theta = atan2(x(3), x(2));
-  curr_trans= Transform(x(0), x(1), theta);
-}
+    //find the coefficients of the quadratic function of lambda
+    // Define right side
+    float pow_2 = 4;
+    float pow_1 = 2*(S(0,0)+S(1,1));
+    float pow_0 = S.determinant();
+
+    // Define left side coefficients
+    Eigen::Matrix4f c1;
+    Eigen::Matrix4f e1;
+    Eigen::Matrix4f e2;
+
+    c1.block<2,2>(0,0) = A.inverse()*B*B.transpose()*A.inverse().transpose();
+    c1.block<2,2>(0,2) = -A.inverse()*B;
+    c1.block<2,2>(2,0) = c1.block<2,2>(0,2); //-A.inverse()*B;
+    c1.block<2,2>(2,2) = Eigen::MatrixXf::Identity(2,2);
+
+    e1.block<2,2>(0,0) = A.inverse()*B*S_A*B.transpose()*A.inverse().transpose();
+    e1.block<2,2>(0,2) = -A.inverse()*B*S_A;
+    e1.block<2,2>(2,0) = e1.block<2,2>(0,2); //-A.inverse()*B*S_A;
+    e1.block<2,2>(2,2) = S_A;
+
+    e2.block<2,2>(0,0) = A.inverse()*B*S_A.transpose()*S_A*B.transpose()*A.inverse().transpose();
+    e2.block<2,2>(0,2) = -A.inverse()*B*S_A.transpose()*S_A;
+    e2.block<2,2>(2,0) = e2.block<2,2>(0,2); //-A.inverse()*B*S_A.transpose()*S_A;
+    e2.block<2,2>(2,2) = S_A.transpose()*S_A;
+    // std::cout << e1 << '\n' << '\n';
+    // std::cout << e2 << '\n' << '\n';
+
+    // Calculate coefficients of quartic
+    float a = 16;
+    float b = 8*pow_1;
+    float c = 8*pow_0 + pow_1 - (4*g*c1*g.transpose()).value();
+    float d = 2*pow_0 + pow(pow_1,2);
+    float e = pow(pow_0,2) - (4*g*e1*g.transpose()).value() - (g*e2*g.transpose()).value();
+
+    // find the value of lambda by solving the equation formed. You can use the greatest real root function
+    float lambda = greatest_real_root(a, b, c, d, e);
+    std::cout << lambda << '\n';
+    //find the value of x which is the vector for translation and rotation
+    Eigen::Vector4f x;
+    x = -(2*M + 2*lambda*W).inverse().transpose()*g.transpose();
+    // std::cout << x << '\n';
+    // Convert from x to new transform
+    float theta = atan2(x(3), x(2));
+    curr_trans= Transform(x(0), x(1), theta);
+    // std::cout << curr_trans.getMatrix() << '\n';
+    //Repeat until convergence
+
+    // i++;
+  }
 }
