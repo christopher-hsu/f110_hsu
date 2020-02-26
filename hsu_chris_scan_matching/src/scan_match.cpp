@@ -67,8 +67,8 @@ class ScanProcessor {
         return;
       }
 
-      //col.r = 0.0; col.b = 1.0; col.g = 0.0; col.a = 1.0;
-      //points_viz->addPoints(points, col);
+      // col.r = 0.0; col.b = 1.0; col.g = 0.0; col.a = 1.0;
+      // points_viz->addPoints(points, col);
 
       col.r = 1.0; col.b = 0.0; col.g = 0.0; col.a = 1.0;
       points_viz->addPoints(prev_points, col);
@@ -87,9 +87,9 @@ class ScanProcessor {
         //********** Find correspondence between points of the current and previous frames  *************** ////
         // ********* getCorrespondence() function is the fast search function and getNaiveCorrespondence function is the naive search option **** ////
 
-        // getCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
+        getCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
 
-        getNaiveCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
+        // getNaiveCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
 
 
         prev_trans = curr_trans;

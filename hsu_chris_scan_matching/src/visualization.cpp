@@ -8,7 +8,7 @@ PointVisualizer::PointVisualizer(ros::Publisher& pub, string ns, string frame_id
   dots.pose.orientation.w = 1.0;
   dots.id = num_visuals;
   dots.type = visualization_msgs::Marker::POINTS;
-  dots.scale.x = dots.scale.y = 0.005;
+  dots.scale.x = dots.scale.y = 0.05;
   ++num_visuals;
 }
 

@@ -55,15 +55,98 @@ void getCorrespondence(vector<Point>& old_points, vector<Point>& trans_points, v
 
   //Do for each point
   for(int i = 0; i<n; ++i){
+    Point p_i_w = trans_points[i];
+    // Initialization
+    // Current best match and dist
+    int best = -1;
+    int second_best = -1;
 
-    
+    int best_up = -1;
+    int best_down = -1;
+    double best_up_dist = 9999999.9;
+    double best_down_dist = 9999999.9;
 
-    int best = 0;
-    int second_best = 0;
+    // Approx index in old scan of trans point p_i_w
+    p_i_w.wrapTheta();
+    int start_idx = (p_i_w.theta + M_PI) * (m/(2*M_PI)); //check if m is correct
+    // Starting search index
+    int we_start_at = (last_best != -1) ? (last_best + 1) : start_idx;
+    int up = we_start_at+1, down = we_start_at;
+    // Distance of last point examined
+    double last_dist_up = 9999999.9, last_dist_down = 9999999.9;
+    // Stopping conditions of search
+    bool up_stopped = false, down_stopped = false;
 
-      c.push_back(Correspondence(&trans_points[i], &points[i], &old_points[best], &old_points[second_best]));
+    while (!(up_stopped && down_stopped)) {
+      // should we explore up or down
+      bool now_up = !up_stopped & (last_dist_up <= last_dist_down);
+      if (now_up) {
+        if (up >= m-1) {
+          if (best_up == -1) {
+            best_up = m-1;
+          }
+          up_stopped = true;
+          continue;
+        }
+        last_dist_up = (p_i_w.distToPoint2(&old_points[up]));
+        if (last_dist_up < best_up_dist) {
+          best_up = up;
+          best_up_dist = last_dist_up;
+        }
+        if (up > start_idx) {
+          double d_phi = old_points[up].theta - p_i_w.theta;
+          double min_dist_up = sin(d_phi) * p_i_w.r;
+          if (pow(min_dist_up,2) > best_up_dist){
+            up_stopped = true; 
+            continue;
+          }
+          up = (old_points[up].r < p_i_w.r) ? jump_table[up][UP_BIG] : jump_table[up][UP_SMALL];
+        }
+        else {
+          up++;
+        }
+      }
+      if (!now_up) {
+        if (down <= 0) {
+          if (best_down == -1) {
+            best_down = 0;
+          }
+          down_stopped = true;
+          continue;
+        }
+        last_dist_down = (p_i_w.distToPoint2(&old_points[down]));
+        if (last_dist_down < best_down_dist) {
+          best_down = down;
+          best_down_dist = last_dist_down;
+        }
+        if (down < start_idx) {
+          double d_phi = old_points[down].theta - p_i_w.theta;
+          double min_dist_down = sin(d_phi) * p_i_w.r;
+          if (pow(min_dist_down,2) > best_down_dist){
+            down_stopped = true; 
+            continue;
+          }
+          down = (old_points[down].r < p_i_w.r) ? jump_table[down][DOWN_BIG] : jump_table[down][DOWN_SMALL];
+        }
+        else {
+          down--;
+        }
+      }
     }
+    // Determine best and second best
+    if (best_down_dist < best_up_dist) {
+      best = best_down;
+      second_best = best_down + 1;
+    }
+    else {
+      best = best_up;
+      second_best = best_up - 1;
+    }
+    last_best = best;
+
+    c.push_back(Correspondence(&trans_points[i], &points[i], &old_points[best], &old_points[second_best]));
   }
+}
 
 
 void computeJump(vector< vector<int> >& table, vector<Point>& points){

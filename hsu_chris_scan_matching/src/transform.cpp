@@ -68,7 +68,8 @@ float greatest_real_root(float a, float b, float c, float d, float e) {
   float max_real_root = 0.f;
 
   for (complex<float> root: roots) {
-    if(root.imag()==0){
+    // if(root.imag()==0){
+    if(abs(root.imag()) < 0.0001){
     max_real_root = max(max_real_root, root.real());
     }
   //std::cout<<"Max real root:" << max_real_root<<std::endl;
@@ -85,17 +86,8 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
   // output : update the curr_trans object. Being a call by reference function, Any changes you make to curr_trans will be reflected in the calling function in the scan_match.cpp program/
 
   // You can change the number of iterations here. More the number of iterations, slower will be the convergence but more accurate will be the results. You need to find the right balance.
-  int number_iter = 1;
+  int number_iter = 2;
 
-  // Eigen::Vector4f prev_x;
-  // prev_x.setZero();
-  // Eigen::Vector4f x;
-  // x << 10, 10, 10, 10;
-  // float error = 1;
-  // int i = 0;
-  // while(i<number_iter || (x-prev_x).norm()>error) {
-  //   // std::cout << i << '\n';
-  //   prev_x = x;
   for(int i = 0; i<number_iter; i++) {
 
     //fill in the values of the matrics
@@ -118,8 +110,8 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
 
     for(int ii=0; ii<corresponds.size(); ii++) {
 
-      M_i << 1, 0, corresponds[ii].po->getX(), -corresponds[ii].po->getY(), 
-             0, 1, corresponds[ii].po->getY(), corresponds[ii].po->getX();
+      M_i << 1, 0, corresponds[ii].p->getX(), -corresponds[ii].p->getY(), 
+             0, 1, corresponds[ii].p->getY(), corresponds[ii].p->getX();
       C_i << corresponds[ii].getNormalNorm()*corresponds[ii].getNormalNorm().transpose();
       pi_i(0) = corresponds[ii].pj1->getX();
       pi_i(1) = corresponds[ii].pj1->getY();
@@ -167,8 +159,6 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
     e2.block<2,2>(0,2) = -A.inverse()*B*S_A.transpose()*S_A;
     e2.block<2,2>(2,0) = e2.block<2,2>(0,2); //-A.inverse()*B*S_A.transpose()*S_A;
     e2.block<2,2>(2,2) = S_A.transpose()*S_A;
-    // std::cout << e1 << '\n' << '\n';
-    // std::cout << e2 << '\n' << '\n';
 
     // Calculate coefficients of quartic
     float a = 16;
@@ -183,13 +173,9 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
     //find the value of x which is the vector for translation and rotation
     Eigen::Vector4f x;
     x = -(2*M + 2*lambda*W).inverse().transpose()*g.transpose();
-    // std::cout << x << '\n';
     // Convert from x to new transform
     float theta = atan2(x(3), x(2));
-    curr_trans= Transform(x(0), x(1), theta);
-    // std::cout << curr_trans.getMatrix() << '\n';
-    //Repeat until convergence
-
-    // i++;
+    Transform temp = Transform(x(0), x(1), theta);
+    curr_trans = temp + curr_trans;
   }
 }
