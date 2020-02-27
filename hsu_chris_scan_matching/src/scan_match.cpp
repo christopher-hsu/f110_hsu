@@ -89,7 +89,7 @@ class ScanProcessor {
 
         getCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
 
-        // getNaiveCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
+        //getNaiveCorrespondence(prev_points, transformed_points, points, jump_table, corresponds, A*count*count+MIN_INFO);
 
 
         prev_trans = curr_trans;

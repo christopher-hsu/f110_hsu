@@ -68,6 +68,7 @@ float greatest_real_root(float a, float b, float c, float d, float e) {
   float max_real_root = 0.f;
 
   for (complex<float> root: roots) {
+    // std::cout << "imag" << root.imag()<< '\n';
     // if(root.imag()==0){
     if(abs(root.imag()) < 0.0001){
     max_real_root = max(max_real_root, root.real());
@@ -86,7 +87,7 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
   // output : update the curr_trans object. Being a call by reference function, Any changes you make to curr_trans will be reflected in the calling function in the scan_match.cpp program/
 
   // You can change the number of iterations here. More the number of iterations, slower will be the convergence but more accurate will be the results. You need to find the right balance.
-  int number_iter = 2;
+  int number_iter =1;
 
   for(int i = 0; i<number_iter; i++) {
 
@@ -147,29 +148,28 @@ void updateTransform(vector<Correspondence>& corresponds, Transform& curr_trans)
 
     c1.block<2,2>(0,0) = A.inverse()*B*B.transpose()*A.inverse().transpose();
     c1.block<2,2>(0,2) = -A.inverse()*B;
-    c1.block<2,2>(2,0) = c1.block<2,2>(0,2); //-A.inverse()*B;
+    c1.block<2,2>(2,0) = c1.block<2,2>(0,2).transpose();
     c1.block<2,2>(2,2) = Eigen::MatrixXf::Identity(2,2);
 
     e1.block<2,2>(0,0) = A.inverse()*B*S_A*B.transpose()*A.inverse().transpose();
     e1.block<2,2>(0,2) = -A.inverse()*B*S_A;
-    e1.block<2,2>(2,0) = e1.block<2,2>(0,2); //-A.inverse()*B*S_A;
+    e1.block<2,2>(2,0) = e1.block<2,2>(0,2).transpose();
     e1.block<2,2>(2,2) = S_A;
 
     e2.block<2,2>(0,0) = A.inverse()*B*S_A.transpose()*S_A*B.transpose()*A.inverse().transpose();
     e2.block<2,2>(0,2) = -A.inverse()*B*S_A.transpose()*S_A;
-    e2.block<2,2>(2,0) = e2.block<2,2>(0,2); //-A.inverse()*B*S_A.transpose()*S_A;
+    e2.block<2,2>(2,0) = e2.block<2,2>(0,2).transpose();
     e2.block<2,2>(2,2) = S_A.transpose()*S_A;
 
     // Calculate coefficients of quartic
     float a = 16;
     float b = 8*pow_1;
     float c = 8*pow_0 + pow_1 - (4*g*c1*g.transpose()).value();
-    float d = 2*pow_0 + pow(pow_1,2);
-    float e = pow(pow_0,2) - (4*g*e1*g.transpose()).value() - (g*e2*g.transpose()).value();
+    float d = 2*pow_0 + pow(pow_1,2) - (4*g*e1*g.transpose()).value();
+    float e = pow(pow_0,2) - (g*e2*g.transpose()).value();
 
     // find the value of lambda by solving the equation formed. You can use the greatest real root function
     float lambda = greatest_real_root(a, b, c, d, e);
-    std::cout << lambda << '\n';
     //find the value of x which is the vector for translation and rotation
     Eigen::Vector4f x;
     x = -(2*M + 2*lambda*W).inverse().transpose()*g.transpose();
