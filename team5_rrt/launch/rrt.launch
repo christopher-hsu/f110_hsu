@@ -37,7 +37,7 @@
 
 
 
-<node pkg="hsu_chris_rrt" name="view_node" type="visualize_points.py" output="screen">
+<node pkg="team5_rrt" name="view_node" type="visualize_points.py" output="screen">
   </node>
 
 <!-- <node pkg="hsu_chris_rrt" name="pure_pursuit_node" type="pure_pursuit.py" output="screen"> -->
@@ -45,6 +45,6 @@
 
   
   <!-- Launch RVIZ -->
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find hsu_chris_pure_pursuit)/launch/simulator.rviz" output="screen"/>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find team5_rrt)/launch/simulator.rviz" output="screen"/>
   
 </launch>

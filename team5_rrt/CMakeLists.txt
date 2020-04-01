@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(hsu_chris_rrt)
+project(team5_rrt)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -31,8 +31,8 @@ include_directories(
   ${EIGEN3_INCLUDE_DIRS}
 )
 
-add_executable(hsu_rrt_node node/rrt_node.cpp src/rrt.cpp)
+add_executable(rrt_node node/rrt_node.cpp src/rrt.cpp)
 
-target_link_libraries(hsu_rrt_node
+target_link_libraries(rrt_node
   ${catkin_LIBRARIES}
 )
