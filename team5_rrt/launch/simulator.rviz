@@ -69,9 +69,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 21.020788192749023
+      Max Intensity: 50.99971008300781
       Min Color: 0; 0; 225
-      Min Intensity: 0.7230941653251648
+      Min Intensity: 0.6688202619552612
       Name: LaserScan
       Position Transformer: XYZ
       Queue Size: 10
@@ -280,10 +280,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.1897966861724854
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.193576812744141
+      Yaw: 3.1385743618011475
     Saved: ~
 Window Geometry:
   Displays:
@@ -304,4 +304,4 @@ Window Geometry:
     collapsed: true
   Width: 1374
   X: 546
-  Y: 0
+  Y: 27
