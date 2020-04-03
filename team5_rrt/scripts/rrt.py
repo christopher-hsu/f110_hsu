@@ -23,8 +23,8 @@ import itertools
 # tuned parameters
 # GOAL = rospy.get_param('GOAL')
 GOAL = 0.2
-BOUNDARY = 4 #boundary buffer size
-INTER_NUM = 20  #Discritization for collision checking
+BOUNDARY = 2 #boundary buffer size
+INTER_NUM = 50  #Discritization for collision checking
 PATH_FILL = 5  #Upsample path with this many points
 EXTEND_MAX = 0.5
 MAX_ITER = 150
@@ -34,7 +34,7 @@ SAMPLEINFRONT = 0.1 #how close to car to sample
 SAMPLE = 1.4    #Sample range in front
 SIDESAMPLE = 1.2    #Sample range to the sides
 LOOKAHEAD = 0.2 #select waypoints within this buffer of FORWARD
-rrtstar = False
+rrtstar = True
 search_range = 0.5
 # INTER_NUM = rospy.get_param('INTER_NUM')
 # EXTEND_MAX = rospy.get_param('EXTEND_MAX')
@@ -355,7 +355,7 @@ class RRT(object):
                 drive_msg.header.frame_id = "drive"
                 drive_msg.drive.steering_angle = angle
                 drive_msg.drive.speed = 1
-                self.drive_pub.publish(drive_msg)
+                # self.drive_pub.publish(drive_msg)
             else:
                 #Upsample path
                 new_path = self.upsample_path(path)
@@ -388,7 +388,7 @@ class RRT(object):
                 drive_msg.drive.speed = 1
                 self.drive_pub.publish(drive_msg)
 
-
+                # for i in range(new_path.shape[0]):
                 markerArray = MarkerArray()
                 marker = Marker()
                 marker.header.frame_id = "/map"
@@ -400,12 +400,14 @@ class RRT(object):
                 marker.color.a = 1.0
                 marker.color.r = 1.0
                 marker.color.g = 0.7
-                marker.color.b = 0.8
+                marker.color.b = 0.8 #+ i*0.05
                 marker.pose.orientation.w = 1.0
                 marker.pose.position.x = float(self.path_wp[0])
                 marker.pose.position.y = float(self.path_wp[1])
+                # marker.pose.position.x = float(new_path[i,0])
+                # marker.pose.position.y = float(new_path[i,1])
                 marker.pose.position.z = 0
-                # marker.id =
+                # marker.id = i
                 markerArray.markers.append(marker)
 
                 self.visulize.publish(markerArray)       
