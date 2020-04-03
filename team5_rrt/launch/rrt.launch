@@ -39,8 +39,8 @@
 
 
 
-<node pkg="team5_rrt" name="view_node" type="visualize_points.py" output="screen">
-  </node>
+<!-- <node pkg="team5_rrt" name="view_node" type="visualize_points.py" output="screen"> -->
+  <!-- </node> -->
 
 <!-- <node pkg="hsu_chris_rrt" name="pure_pursuit_node" type="pure_pursuit.py" output="screen"> -->
   <!-- </node> -->

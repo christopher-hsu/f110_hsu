@@ -15,6 +15,7 @@ from nav_msgs.msg import OccupancyGrid
 import tf
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
+import itertools
 # from tf import transform_listener
 
 # TODO: import as you need
@@ -22,11 +23,14 @@ from visualization_msgs.msg import MarkerArray
 # tuned parameters
 # GOAL = rospy.get_param('GOAL')
 GOAL = 0.5
-INTER_NUM = 20
+INTER_NUM = 20  #Discritization for collision checking
+PATH_FILL = 5  #Upsample path with this many points
 EXTEND_MAX = 0.5
 MAX_ITER = 100
-FORWARD = 1  #lookhead distance
-SAMPLE = 1.5
+FORWARD = .65  #lookhead distance for wp
+FARFORWARD = 1.2  #far lookhead distance for wp
+SAMPLE = 1.2    #Sample range in front and to the sides
+LOOKAHEAD = 0.2 #select waypoints within this buffer of FORWARD
 rrtstar = False
 search_range = 0.5
 # INTER_NUM = rospy.get_param('INTER_NUM')
@@ -130,6 +134,27 @@ class RRT(object):
         grid_indecies[0,:] = np.clip(((((positions[:,1] - self.origin[1])/self.resolution).astype(int) - self.y_offset)),0,self.grid_static.shape[0]-1)
         return grid_indecies
 
+    def AddBoundry(self,indicies,boundry_len = 2):
+        '''
+        Args: 
+            indicies (numpy array shape (2*n)): indicies that you want its sourounding
+        Returns:
+            updated_indicies (numpy array shape (2*n)): updated indicies
+        '''
+
+        # print(range(-boundry_len,boundry_len+1))
+
+        perms = np.array(list(itertools.product(range(-boundry_len,boundry_len+1),repeat = 2)))
+
+        list_of_boundries = [indicies + perms[index_perm][:,np.newaxis] for index_perm in range(perms.shape[0])]
+
+        updated_indicies = np.hstack(list_of_boundries)
+
+        updated_indicies[0,:] = np.clip(updated_indicies[0,:],0,self.grid_static.shape[0]-1)
+        updated_indicies[1,:] = np.clip(updated_indicies[1,:],0,self.grid_static.shape[1]-1)
+
+        return updated_indicies
+
     def scan_callback(self, scan_msg):
         """
         LaserScan callback, you should update your occupancy grid here
@@ -140,7 +165,6 @@ class RRT(object):
         ranges = np.array(scan_msg.ranges)
         angles = np.linspace(scan_msg.angle_min, scan_msg.angle_max, num=ranges.shape[0])
 
-        # print(angles[0])
         lidar_xy_car_frame = np.zeros((ranges.shape[0],2))
 
         lidar_xy_car_frame[:,0] = (ranges * np.cos(angles)) 
@@ -149,49 +173,23 @@ class RRT(object):
         R_mat = np.array([[np.cos(self.euler[2]),np.sin(self.euler[2])],
                         [-np.sin(self.euler[2]),np.cos(self.euler[2])]])
 
-        # lidar_xy_global = np.dot(R_mat,lidar_xy_car_frame.transpose())
         lidar_xy_global = np.dot(lidar_xy_car_frame,R_mat)
 
 
-        # lidar_xy_global[0,:] += self.position[0]
-        # lidar_xy_global[1,:] += self.position[1]
         lidar_xy_global[:,0] += self.position[0]
         lidar_xy_global[:,1] += self.position[1]
 
-        # grid_indecies = self.PosToMap(lidar_xy_global.transpose())
-
-        # markerArray = MarkerArray()
-        # for i in range(lidar_xy_global.shape[0]):
-        #     x = float(lidar_xy_global[i,0])
-        #     y = float(lidar_xy_global[i,1])
-        #     marker = Marker()
-        #     marker.header.frame_id = "/map"
-        #     marker.type = marker.SPHERE
-        #     marker.action = marker.ADD
-        #     marker.scale.x = 0.11
-        #     marker.scale.y = 0.11
-        #     marker.scale.z = 0.11
-        #     marker.color.a = 1.0
-        #     marker.color.r = 1.0
-        #     marker.color.g = 0.7
-        #     marker.color.b = 0.8
-        #     marker.pose.orientation.w = 1.0
-        #     marker.pose.position.x = x
-        #     marker.pose.position.y = y
-        #     marker.pose.position.z = 0
-        #     marker.id = i
-        #     markerArray.markers.append(marker)
+  
 
         # self.visulize.publish(markerArray)
         grid_indecies = self.PosToMap(lidar_xy_global)
         # print('scan_callback: ',grid_indecies[:,1], ' position: ', self.position)
+        grid_indecies_wb = self.AddBoundry(grid_indecies,boundry_len=3)
 
-
-        # self.grid_dynamic[grid_indecies[0,:],grid_indecies[1,:]] = 0
 
         self.grid_dynamic=np.zeros((self.grid_static.shape[0],self.grid_static.shape[1]))
 
-        self.grid_dynamic[grid_indecies[0,:],grid_indecies[1,:]] = 1
+        self.grid_dynamic[grid_indecies_wb[0,:],grid_indecies_wb[1,:]] = 1
 
 
         return 
@@ -219,72 +217,90 @@ class RRT(object):
         path = []
 
  
-        # combine the waypoint with our goal point
+        # Compare the waypoint with our goal point to find points in lookahead
         point_dist =  np.sqrt(np.sum(np.square(waypoint[:, 0:2]-self.position), axis=1))
-        point_index = np.where(abs(point_dist-FORWARD)< 0.2)[0]
-
+        point_index_far = np.where(abs(point_dist-FARFORWARD)< LOOKAHEAD)[0]
         #Check collisions for sample waypoints
-        wp_forward = waypoint[point_index,:]
+        wp_forward_far = waypoint[point_index_far,:]
         # use occupancy grid
-        grid_indecies = self.PosToMap(wp_forward[:,:2]) 
+        grid_indecies_far = self.PosToMap(wp_forward_far[:,:2]) 
         # Create mask to block out waypoints in wp_forward that are occupied
-        mask = np.ones(len(wp_forward),bool)
 
-        for idx in range(grid_indecies.shape[1]):
-            if self.grid_static[grid_indecies[0,idx],grid_indecies[1,idx]] != 0 or self.grid_dynamic[grid_indecies[0,idx],grid_indecies[1,idx]] != 0:
-                mask[idx] = 0
-                # return False
+        mask_far = np.ones(len(wp_forward_far),bool)
 
+        # for idx in range(grid_indecies_far.shape[1]):
+        #     if self.grid_static[grid_indecies_far[0,idx],grid_indecies_far[1,idx]] != 0 or self.grid_dynamic[grid_indecies_far[0,idx],grid_indecies_far[1,idx]] != 0:
+        #         mask_far[idx] = 0
+        mask_far = np.where(self.grid_static[grid_indecies_far[0,:],grid_indecies_far[1,:]] == 0, mask_far, True) + \
+                np.where(self.grid_dynamic[grid_indecies_far[0,:],grid_indecies_far[1,:]] == 0, mask_far, True)
 
-        # for index in point_index:
-            # l2_0 = [waypoint[index, 0]-self.position[0], waypoint[index,1]-self.position[1]]
-        for wp in wp_forward[mask]:
+        #Find first wp in list that is in front of the car
+        for wp in wp_forward_far[mask_far]:
             l2_0 = [wp[0]-self.position[0], wp[1]-self.position[1]]
-            goalx_veh = math.cos(self.euler[2])*l2_0[0] + math.sin(self.euler[2])*l2_0[1]
-            goaly_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
-            #print(goalx_veh, goaly_veh)
-            #print(abs(math.atan(goalx_veh/goaly_veh)))
-            if abs(math.atan(goalx_veh/goaly_veh)) <  np.pi/2 and goalx_veh>0 :
-                 # self.waypoint = waypoint[index] 
+            wpx_veh = math.cos(self.euler[2])*l2_0[0] + math.sin(self.euler[2])*l2_0[1]
+            wpy_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
+            if abs(math.atan(wpx_veh/wpy_veh)) <  np.pi/2 and wpx_veh>0 :
                  self.waypoint = wp
-                 #print("point find")
                  break
 
-        #Set waypoint as goal
-        goal_x = self.waypoint[0]
-        goal_y = self.waypoint[1]
-        l2_0 = [goal_x, -self.position[0], goal_y-self.position[1]]
-        goaly_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
+
+        if self.check_wp_collision(self.waypoint):
+            #Set waypoint as goal
+            goal_x = self.waypoint[0]
+            goal_y = self.waypoint[1]
+            l2_0 = [goal_x-self.position[0], goal_y-self.position[1]]
+            goaly_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
+            #Calulate pure pursuit control
+            L = math.sqrt((goal_x-self.position[0])**2 +(goal_y-self.position[1])**2)
+            arc = 2*goaly_veh/(L**2)
+            angle = 0.3*arc
+            angle = np.clip(angle, -0.4, 0.4)
+
+            drive_msg = AckermannDriveStamped()
+            drive_msg.header.stamp = rospy.Time.now()
+            drive_msg.header.frame_id = "drive"
+            drive_msg.drive.steering_angle = angle
+            drive_msg.drive.speed = 1
+            self.drive_pub.publish(drive_msg)
+            # print("No collisions, drive to close", goal_x, goal_y)
+
+        # #Use RRT to go to far waypoint
+        else:
+            #Set waypoint as goal
+            goal_x = self.waypoint[0]
+            goal_y = self.waypoint[1]
 
 
-        tree = []   # a list include node structures
-        x_start = Node()
-        x_start.x = self.position[0]
-        x_start.y = self.position[1]
-        x_start.cost = 0
-        x_start.is_root = True
-        tree.append(x_start)
+            tree = []   # a list include node structures
+            x_start = Node()
+            x_start.x = self.position[0]
+            x_start.y = self.position[1]
+            x_start.cost = 0
+            x_start.is_root = True
+            tree.append(x_start)
 
-        # use global frame
+            # use global frame
 
-        for i in range(MAX_ITER):
-            sample_point = self.sample()  #return (x, y) 
-            #print(sample_point)
-            x_near_index = self.nearest(tree, sample_point)  #return the index in the tree
-            x_near = tree[x_near_index]
+            for i in range(MAX_ITER):
+                sample_point = self.sample()  #return (x, y) 
+                #print(sample_point)
+                x_near_index = self.nearest(tree, sample_point)  #return the index in the tree
+                x_near = tree[x_near_index]
 
-            x_new = self.steer(x_near, sample_point)  # sampled_point (tuple of (float, float))
-      
-            #check is collide between x_new and x_near
-            if self.check_collision(x_near, x_new):
-                x_new.parent = x_near_index           
-                print(x_new.parent)
+                x_new = self.steer(x_near, sample_point)  # sampled_point (tuple of (float, float))
+          
+                #check is collide between x_new and x_near
+                if self.check_collision(x_near, x_new):
+                    x_new.parent = x_near_index           
+                    # print(x_new.parent)
                 if rrtstar:
+                   
                     x_new.cost = self.cost(tree, x_new)
                     neighborhood = self.near(tree, x_new)   # it store the index
                     # neighbor_colliided
                     neighbor_colliided = []
-                    best_neighbor = x_new.parent
+                   
+                    # print(len(neighborhood))
                     for neighbor_index in neighborhood:
                         if not self.check_collision(tree[neighbor_index], x_new):
                             neighbor_colliided.append(False)
@@ -293,37 +309,76 @@ class RRT(object):
                             neighbor_colliided.append(True)
                             cost = tree[neighbor_index].cost + self.line_cost(tree[neighbor_index], x_new)
                             if cost < x_new.cost:
-                                best_neighbor = neighbor_index
                                 x_new.cost = cost
-                                x_new.parent_index = neighbor_index
+                                x_new.parent = neighbor_index
                      
                     # check for other points whehter to change parents
                     for i in range(len(neighborhood)):
-                        if not neighbor_colliided[i] or i == best_neighbor:
+                        if not neighbor_colliided[i] or neighborhood[i] == x_new.parent:
+                            
                             continue
                         if tree[neighborhood[i]].cost > x_new.cost + self.line_cost(x_new, tree[neighborhood[i]]):
                             tree[neighborhood[i]].parent = len(tree) #the index of x_new
-                      
+                          
                 #rrtstar finish
                 tree.append(x_new)                
 
-                if self.is_goal(x_new, self.waypoint[0],self.waypoint[1]):  # if closer enough, then we can break
+                if self.is_goal(x_new, goal_x, goal_y):  # if closer enough, then we can break
                     #print("try to find!")
                     path = self.find_path(tree, x_new)
                     print("path find!")
                     break
 
+            if path == []:
+                print("path NOT found") # And go to the orginal pure pursuit waypoint
+                #Calculate L in global frame
+                L = math.sqrt((goal_x-self.position[0])**2 +(goal_y-self.position[1])**2)
+                #Calculate steering in local
+                l2_0 = [goal_x-self.position[0], goal_y-self.position[1]]
+                goaly_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
+                arc = 2*goaly_veh/(L**2)
+                angle = 0.3*arc
+                angle = np.clip(angle, -0.4, 0.4)
+
+                drive_msg = AckermannDriveStamped()
+                drive_msg.header.stamp = rospy.Time.now()
+                drive_msg.header.frame_id = "drive"
+                drive_msg.drive.steering_angle = angle
+                drive_msg.drive.speed = 1
+                self.drive_pub.publish(drive_msg)
+            else:
+                #Upsample path
+                new_path = self.upsample_path(path)
+                #Use pursuit on new set of points in path
+                point_dist_path =  np.sqrt(np.sum(np.square(new_path-self.position), axis=1))
+                point_index_path = np.where(abs(point_dist_path-FORWARD)< LOOKAHEAD)[0]
+                #Find first wp in list that is in front of the car
+                for wp in new_path[point_index_path]:
+                    l2_0 = [wp[0]-self.position[0], wp[1]-self.position[1]]
+                    pathx_veh = math.cos(self.euler[2])*l2_0[0] + math.sin(self.euler[2])*l2_0[1]
+                    pathy_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
+                    if abs(math.atan(pathx_veh/pathy_veh)) <  np.pi/2 and pathx_veh>0 :
+                         self.waypoint = wp
+                         break
+
+                #Calculate L in global frame
+                L = math.sqrt((self.waypoint[0]-self.position[0])**2 +(self.waypoint[1]-self.position[1])**2)
+                #Calculate steering in local
+                l2_steer = [self.waypoint[0]-self.position[0], self.waypoint[1]-self.position[1]]
+                goaly_veh = -math.sin(self.euler[2])*l2_steer[0] + math.cos(self.euler[2])*l2_steer[1]
+                arc = 2*goaly_veh/(L**2)
+                angle = 0.5*arc
+                angle = np.clip(angle, -0.4, 0.4)
+
+                drive_msg = AckermannDriveStamped()
+                drive_msg.header.stamp = rospy.Time.now()
+                drive_msg.header.frame_id = "drive"
+                drive_msg.drive.steering_angle = angle
+                drive_msg.drive.speed = 1
+                self.drive_pub.publish(drive_msg)
 
 
-        # use this short path and CSV file to get waypoint
-
-
-        if len(path)>0:
-            markerArray = MarkerArray()
-
-            for ii in range(len(path)):
-                x = float(path[ii].x)
-                y = float(path[ii].y)
+                markerArray = MarkerArray()
                 marker = Marker()
                 marker.header.frame_id = "/map"
                 marker.type = marker.SPHERE
@@ -336,47 +391,13 @@ class RRT(object):
                 marker.color.g = 0.7
                 marker.color.b = 0.8
                 marker.pose.orientation.w = 1.0
-                marker.pose.position.x = x
-                marker.pose.position.y = y
+                marker.pose.position.x = float(self.waypoint[0])
+                marker.pose.position.y = float(self.waypoint[1])
                 marker.pose.position.z = 0
-                marker.id = ii
+                # marker.id =
                 markerArray.markers.append(marker)
 
-            self.visulize.publish(markerArray)
-
-
-        if path == []:
-            # print("wp", goal_x)
-            L = math.sqrt((self.waypoint[0]-self.position[0])**2 +(self.waypoint[1]-self.position[1])**2)
-            arc = 2*goaly_veh/(L**2)
-            angle = 0.3*arc
-            angle = np.clip(angle, -0.4, 0.4)
-
-            drive_msg = AckermannDriveStamped()
-            drive_msg.header.stamp = rospy.Time.now()
-            drive_msg.header.frame_id = "drive"
-            drive_msg.drive.steering_angle = angle
-            drive_msg.drive.speed = 1
-            self.drive_pub.publish(drive_msg)
-        else:
-            for ii in range(len(path)):
-                # print('node', path[ii].x,path[ii].y, "wp", self.waypoint[:2])
-                #Calculate L in global frame
-                L = math.sqrt((path[ii].x-self.position[0])**2 +(path[ii].y-self.position[1])**2)
-                #Calculate steering in local
-                l2_steer = [path[ii].x-self.position[0], path[ii].y-self.position[1]]
-                goaly_veh = -math.sin(self.euler[2])*l2_steer[0] + math.cos(self.euler[2])*l2_steer[1]
-                arc = 2*goaly_veh/(L**2)
-                angle = 0.3*arc
-                angle = np.clip(angle, -0.4, 0.4)
-
-                drive_msg = AckermannDriveStamped()
-                drive_msg.header.stamp = rospy.Time.now()
-                drive_msg.header.frame_id = "drive"
-                drive_msg.drive.steering_angle = angle
-                drive_msg.drive.speed = 1
-                self.drive_pub.publish(drive_msg)
-       
+                self.visulize.publish(markerArray)       
 
         return None
 
@@ -404,17 +425,8 @@ class RRT(object):
 
             random_sample_global[:,1] += self.position[1]
 
-
-
-            # x = random.uniform(0, SAMPLE) 
-            # y = random.uniform(-SAMPLE, SAMPLE)
-            # global_x = math.cos(self.euler[2])*x - math.sin(self.euler[2])*y
-            # global_y = math.sin(self.euler[2])*x + math.cos(self.euler[2])*y
-            # position = np.array([global_x, global_y])
-            # position = position[np.newaxis,:]
             grid_index = self.PosToMap(random_sample_global)
             #Sampling just 1 point so [,0]
-            # for i in range(grid_index.shape[1]):
             if self.grid_static[grid_index[0,0],grid_index[1,0]] == 0 and self.grid_dynamic[grid_index[0,0],grid_index[1,0]] == 0:
                 return (random_sample_global[:,0] , random_sample_global[:,1])
 
@@ -466,6 +478,22 @@ class RRT(object):
 
         return new_node
 
+    def upsample_path(self,path):
+        if len(path) == 1:
+            path_x = np.linspace(self.position[0],path[0].x, num=PATH_FILL).reshape(PATH_FILL,1)
+            path_y = np.linspace(self.position[1],path[0].y, num=PATH_FILL).reshape(PATH_FILL,1)
+            new_path = np.hstack((path_x,path_y))
+        else: 
+            for ii in range(len(path)-1):
+                path_x = np.linspace(path[ii].x,path[ii+1].x, num=PATH_FILL).reshape(PATH_FILL,1)
+                path_y = np.linspace(path[ii].y,path[ii+1].y, num=PATH_FILL).reshape(PATH_FILL,1)
+                new = np.hstack((path_x,path_y))
+                if ii == 0:
+                    new_path = new
+                else:
+                    new_path = np.vstack((new_path,new))
+        return new_path
+
     def check_collision(self, nearest_node, new_node):
         """
         This method should return whether the path between nearest and new_node is
@@ -486,10 +514,33 @@ class RRT(object):
         # use occupancy grid
         grid_indecies = self.PosToMap(positions) 
 
-        for i in range(grid_indecies.shape[1]):
-            if self.grid_static[grid_indecies[0,i],grid_indecies[1,i]] != 0 or self.grid_dynamic[grid_indecies[0,i],grid_indecies[1,i]] != 0:
-                return False
+        if any(self.grid_static[grid_indecies[0,:],grid_indecies[1,:]]) != 0 or any(self.grid_dynamic[grid_indecies[0,:],grid_indecies[1,:]] != 0):
+            return False
 
+        return True
+
+    def check_wp_collision(self, waypoint):
+        """
+        This method should return whether the path between car and waypoint in question is
+        collision free.
+
+        Args:
+            nearest (Node): nearest node on the tree
+            new_node (Node): new node from steering
+        Returns:
+            collision (bool): whether the path between the two nodes are is collision free
+                              with the occupancy grid, true for free, false for collision
+        """
+       
+        path_x = np.linspace(self.position[0], waypoint[0], num=INTER_NUM).reshape(INTER_NUM,1)
+        path_y = np.linspace(self.position[1], waypoint[1], num=INTER_NUM).reshape(INTER_NUM,1)
+
+        positions = np.hstack((path_x,path_y))
+        # use occupancy grid
+        grid_indecies = self.PosToMap(positions) 
+
+        if any(self.grid_static[grid_indecies[0,:],grid_indecies[1,:]]) != 0 or any(self.grid_dynamic[grid_indecies[0,:],grid_indecies[1,:]] != 0):
+            return False
 
         return True
 
@@ -573,7 +624,7 @@ class RRT(object):
         neighborhood = []        
         for i in range(len(tree)):
             dist = math.sqrt((node.x-tree[i].x)**2+(node.y-tree[i].y)**2)
-            if dist < search_range:
+            if dist < search_range and not tree[i].is_root:
                 neighborhood.append(i)
 
         return neighborhood
