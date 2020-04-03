@@ -293,41 +293,41 @@ class RRT(object):
                 if self.check_collision(x_near, x_new):
                     x_new.parent = x_near_index           
                     # print(x_new.parent)
-                if rrtstar:
+                    if rrtstar:
                    
-                    x_new.cost = self.cost(tree, x_new)
-                    neighborhood = self.near(tree, x_new)   # it store the index
-                    # neighbor_colliided
-                    neighbor_colliided = []
+                        x_new.cost = self.cost(tree, x_new)
+                        neighborhood = self.near(tree, x_new)   # it store the index
+                        # neighbor_colliided
+                        neighbor_colliided = []
                    
-                    # print(len(neighborhood))
-                    for neighbor_index in neighborhood:
-                        if not self.check_collision(tree[neighbor_index], x_new):
-                            neighbor_colliided.append(False)
-                            continue
-                        else:
-                            neighbor_colliided.append(True)
-                            cost = tree[neighbor_index].cost + self.line_cost(tree[neighbor_index], x_new)
-                            if cost < x_new.cost:
-                                x_new.cost = cost
-                                x_new.parent = neighbor_index
+                        # print(len(neighborhood))
+                        for neighbor_index in neighborhood:
+                            if not self.check_collision(tree[neighbor_index], x_new):
+                                neighbor_colliided.append(False)
+                                continue
+                            else:
+                                neighbor_colliided.append(True)
+                                cost = tree[neighbor_index].cost + self.line_cost(tree[neighbor_index], x_new)
+                                if cost < x_new.cost:
+                                    x_new.cost = cost
+                                    x_new.parent = neighbor_index
                      
-                    # check for other points whehter to change parents
-                    for i in range(len(neighborhood)):
-                        if not neighbor_colliided[i] or neighborhood[i] == x_new.parent:
-                            
-                            continue
-                        if tree[neighborhood[i]].cost > x_new.cost + self.line_cost(x_new, tree[neighborhood[i]]):
-                            tree[neighborhood[i]].parent = len(tree) #the index of x_new
+                        # check for other points whehter to change parents
+                        for i in range(len(neighborhood)):
+                            if not neighbor_colliided[i] or neighborhood[i] == x_new.parent:
+                                
+                                continue
+                            if tree[neighborhood[i]].cost > x_new.cost + self.line_cost(x_new, tree[neighborhood[i]]):
+                                tree[neighborhood[i]].parent = len(tree) #the index of x_new
                           
-                #rrtstar finish
-                tree.append(x_new)                
+                    #rrtstar finish
+                    tree.append(x_new)                
 
-                if self.is_goal(x_new, goal_x, goal_y):  # if closer enough, then we can break
-                    #print("try to find!")
-                    path = self.find_path(tree, x_new)
-                    print("path find!")
-                    break
+                    if self.is_goal(x_new, goal_x, goal_y):  # if closer enough, then we can break
+                        #print("try to find!")
+                        path = self.find_path(tree, x_new)
+                        print("path find!")
+                        break
 
             if path == []:
                 print("path NOT found") # And go to the orginal pure pursuit waypoint
