@@ -22,14 +22,17 @@ import itertools
 
 # tuned parameters
 # GOAL = rospy.get_param('GOAL')
-GOAL = 0.5
+GOAL = 0.2
+BOUNDARY = 4 #boundary buffer size
 INTER_NUM = 20  #Discritization for collision checking
 PATH_FILL = 5  #Upsample path with this many points
 EXTEND_MAX = 0.5
-MAX_ITER = 100
-FORWARD = .65  #lookhead distance for wp
-FARFORWARD = 1.2  #far lookhead distance for wp
-SAMPLE = 1.2    #Sample range in front and to the sides
+MAX_ITER = 150
+FORWARD = 0.65  #lookhead distance for wp
+FARFORWARD = 1.4  #far lookhead distance for wp
+SAMPLEINFRONT = 0.1 #how close to car to sample
+SAMPLE = 1.4    #Sample range in front
+SIDESAMPLE = 1.2    #Sample range to the sides
 LOOKAHEAD = 0.2 #select waypoints within this buffer of FORWARD
 rrtstar = False
 search_range = 0.5
@@ -103,7 +106,8 @@ class RRT(object):
 
         # part one:  dynamic_grid 
         # part two:  static_grid
-        self.waypoint  = waypoint[0]
+        self.waypoint = waypoint[0]
+        self.path_wp = self.waypoint
 
     @staticmethod
     def process_map(map_message):
@@ -184,7 +188,7 @@ class RRT(object):
         # self.visulize.publish(markerArray)
         grid_indecies = self.PosToMap(lidar_xy_global)
         # print('scan_callback: ',grid_indecies[:,1], ' position: ', self.position)
-        grid_indecies_wb = self.AddBoundry(grid_indecies,boundry_len=3)
+        grid_indecies_wb = self.AddBoundry(grid_indecies,boundry_len=BOUNDARY)
 
 
         self.grid_dynamic=np.zeros((self.grid_static.shape[0],self.grid_static.shape[1]))
@@ -330,11 +334,17 @@ class RRT(object):
                         break
 
             if path == []:
+
+                #NEED TO FIGURE OUT WHAT TO DO IF path is not found. 2 options below are go to goal wp
+                #or go to previosly found wp in path
+
                 print("path NOT found") # And go to the orginal pure pursuit waypoint
                 #Calculate L in global frame
-                L = math.sqrt((goal_x-self.position[0])**2 +(goal_y-self.position[1])**2)
+                # L = math.sqrt((goal_x-self.position[0])**2 +(goal_y-self.position[1])**2)
+                L = math.sqrt((self.path_wp[0]-self.position[0])**2 +(self.path_wp[1]-self.position[1])**2)
                 #Calculate steering in local
-                l2_0 = [goal_x-self.position[0], goal_y-self.position[1]]
+                # l2_0 = [goal_x-self.position[0], goal_y-self.position[1]]
+                l2_0 = [self.path_wp[0]-self.position[0], self.path_wp[1]-self.position[1]]
                 goaly_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
                 arc = 2*goaly_veh/(L**2)
                 angle = 0.3*arc
@@ -358,16 +368,17 @@ class RRT(object):
                     pathx_veh = math.cos(self.euler[2])*l2_0[0] + math.sin(self.euler[2])*l2_0[1]
                     pathy_veh = -math.sin(self.euler[2])*l2_0[0] + math.cos(self.euler[2])*l2_0[1]
                     if abs(math.atan(pathx_veh/pathy_veh)) <  np.pi/2 and pathx_veh>0 :
-                         self.waypoint = wp
+                         # self.waypoint = wp
+                         self.path_wp = wp
                          break
 
                 #Calculate L in global frame
-                L = math.sqrt((self.waypoint[0]-self.position[0])**2 +(self.waypoint[1]-self.position[1])**2)
+                L = math.sqrt((self.path_wp[0]-self.position[0])**2 +(self.path_wp[1]-self.position[1])**2)
                 #Calculate steering in local
-                l2_steer = [self.waypoint[0]-self.position[0], self.waypoint[1]-self.position[1]]
+                l2_steer = [self.path_wp[0]-self.position[0], self.path_wp[1]-self.position[1]]
                 goaly_veh = -math.sin(self.euler[2])*l2_steer[0] + math.cos(self.euler[2])*l2_steer[1]
                 arc = 2*goaly_veh/(L**2)
-                angle = 0.5*arc
+                angle = 0.3*arc
                 angle = np.clip(angle, -0.4, 0.4)
 
                 drive_msg = AckermannDriveStamped()
@@ -391,8 +402,8 @@ class RRT(object):
                 marker.color.g = 0.7
                 marker.color.b = 0.8
                 marker.pose.orientation.w = 1.0
-                marker.pose.position.x = float(self.waypoint[0])
-                marker.pose.position.y = float(self.waypoint[1])
+                marker.pose.position.x = float(self.path_wp[0])
+                marker.pose.position.y = float(self.path_wp[1])
                 marker.pose.position.z = 0
                 # marker.id =
                 markerArray.markers.append(marker)
@@ -418,7 +429,7 @@ class RRT(object):
             R_mat = np.array([[np.cos(self.euler[2]),np.sin(self.euler[2])],
                         [-np.sin(self.euler[2]),np.cos(self.euler[2])]])
 
-            random_sample_car_frame = np.array([np.random.uniform(0,SAMPLE,1),np.random.uniform(-SAMPLE,SAMPLE,1)]).transpose()
+            random_sample_car_frame = np.array([np.random.uniform(SAMPLEINFRONT,SAMPLE,1),np.random.uniform(-SIDESAMPLE,SIDESAMPLE,1)]).transpose()
             random_sample_global = np.dot(random_sample_car_frame,R_mat)
 
             random_sample_global[:,0] += self.position[0]
